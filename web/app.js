@@ -60,17 +60,18 @@ function setupUIListeners() {
     document.getElementById('runBtn').addEventListener('click', runScript);
     document.getElementById('stopBtn').addEventListener('click', stopScript);
     document.getElementById('clearBtn').addEventListener('click', () => {
-        document.getElementById('console').innerHTML = '<div class="text-gray-500 italic">Consola limpiada.</div>';
-    });
-}
-
-function logToConsole(message, type = 'info') {
-    const consoleEl = document.getElementById('console');
-        document.getElementById('uploadBtn').addEventListener('click', () => {
+                document.getElementById('consoleOutput').innerHTML = '';
+            document.getElementById('uploadBtn').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
     document.getElementById('saveBtn').addEventListener('click', saveCode);
     document.getElementById('fileInput').addEventListener('change', loadFile);
+    });
+}
+
+function logToConsole(message, type = 'info') {
+    const consoleEl = document.getElementById('consoleOutput');
+
     const colorClass = type === 'error' ? 'text-red-400' : (type === 'success' ? 'text-green-400' : (type === 'warn' ? 'text-yellow-400' : 'text-gray-300'));
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     
