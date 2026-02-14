@@ -52,8 +52,8 @@ window.onload = () => {
             padding: { top: 16 }
         });
     });
-    setupUIListeners();
 };
+setupUIListeners();
 
 function setupUIListeners() {
     document.getElementById('connectBtn').addEventListener('click', toggleConnect);
