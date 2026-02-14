@@ -66,6 +66,11 @@ function setupUIListeners() {
 
 function logToConsole(message, type = 'info') {
     const consoleEl = document.getElementById('console');
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
+    document.getElementById('saveBtn').addEventListener('click', saveCode);
+    document.getElementById('fileInput').addEventListener('change', loadFile);
     const colorClass = type === 'error' ? 'text-red-400' : (type === 'success' ? 'text-green-400' : (type === 'warn' ? 'text-yellow-400' : 'text-gray-300'));
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     
@@ -187,7 +192,7 @@ function handleOutput(event) {
 async function runScript() {
     if (!isConnected || !commandChar || !hubCapabilities) return;
     
-    const code = editor.getValue();
+        const code = document.getElementById('codeEditor').value;
     const encoder = new TextEncoder();
     const codeBytes = encoder.encode(code);
     
@@ -254,4 +259,30 @@ async function stopScript() {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+// File Management Functions
+function saveCode() {
+    const code = document.getElementById('codeEditor').value;
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'main.py';
+    a.click();
+    URL.revokeObjectURL(url);
+    logToConsole('Archivo guardado como main.py', 'success');
+}
+
+function loadFile(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('codeEditor').value = e.target.result;
+            logToConsole(`Archivo cargado: ${file.name}`, 'success');
+        };
+        reader.readAsText(file);
+    }
 }
