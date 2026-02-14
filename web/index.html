@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTCONNECT Web - Pybricks IDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.359.0/lucide.min.css" rel="stylesheet">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.46.0/min/vs/editor/editor.main.min.css">
+    <style>
+        :root {
+            --bg-color: #0a0a0c;
+            --surface-color: #16161a;
+            --accent-color: #4ade80;
+            --text-color: #e2e8f0;
+            --edge-color: #2e2e33;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+        .glass {
+            background: rgba(22, 22, 26, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--edge-color);
+        }
+        #editor-container {
+            height: calc(100vh - 12rem);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--edge-color);
+        }
+        .console-container {
+            height: 10rem;
+            background: #000;
+            border-top: 1px solid var(--edge-color);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--edge-color);
+            border-radius: 10px;
+        }
+        .btn-premium {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-premium:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+        }
+        .btn-premium:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <div class="glass p-4 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold tracking-tight">BTCONNECT <span class="text-accent-color">WEB</span></h1>
+        </div>
+        <div class="flex gap-2">
+            <button id="connectBtn" class="glass px-4 py-2 rounded-lg flex items-center gap-2 btn-premium">
+                <i data-lucide="bluetooth" class="w-4 h-4"></i>
+                <span id="connStatusText">Connect Hub</span>
+            </button>
+            <button id="runBtn" class="glass px-4 py-2 rounded-lg btn-premium" disabled>
+                <i data-lucide="play" class="w-4 h-4"></i> Run
+            </button>
+            <button id="stopBtn" class="glass px-4 py-2 rounded-lg btn-premium" disabled>
+                <i data-lucide="square" class="w-4 h-4"></i> Stop
+            </button>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col p-4 gap-4">
+        <div class="glass rounded-lg p-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="file-code" class="w-4 h-4"></i>
+                <span class="text-sm font-medium">main.py</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <i data-lucide="code" class="w-4 h-4"></i>
+                <span>PYTHON 3</span>
+            </div>
+        </div>
+
+        <div id="editor-container"></div>
+
+        <div class="console-container glass rounded-lg p-4 overflow-hidden flex flex-col">
+            <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="terminal" class="w-4 h-4 text-accent-color"></i>
+                <span class="text-sm font-medium">Console Output</span>
+                <button id="clearBtn" class="ml-auto text-xs text-gray-400 hover:text-white">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+            </div>
+            <div id="console" class="flex-1 overflow-y-auto font-mono text-xs">
+                <div class="text-gray-500 italic">Console output will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
