@@ -7,7 +7,7 @@ import logging
 from typing import Optional, List, Callable
 from bleak import BleakScanner, BleakClient
 from pybricksdev.ble import find_device
-from pybricksdev.connections.pybricks import PybricksHubBLE
+from pybricksdev.connections.pybricks import PybricksHub
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class PybricksManager:
     """Manages Bluetooth connection and script deployment to Pybricks hub"""
     
     def __init__(self):
-        self.hub: Optional[PybricksHubBLE] = None
+        self.hub: Optional[PybricksHub] = None
         self.client: Optional[BleakClient] = None
         self.connected = False
         self.output_callback: Optional[Callable[[str], None]] = None
@@ -92,9 +92,9 @@ class PybricksManager:
             
             logger.info(f"Found device object: {device}")
             
-            # Use PybricksHubBLE which handles BLE connections
-            self.hub = PybricksHubBLE(device)
-            await self.hub.connect()
+            # Use PybricksHub which handles BLE connections (v1.0.0a46)
+            self.hub = PybricksHub()
+            await self.hub.connect(device)
             
             self.connected = True
             logger.info("Connected successfully!")
