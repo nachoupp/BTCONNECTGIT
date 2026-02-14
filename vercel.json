@@ -1,5 +1,6 @@
 {
   "buildCommand": "echo 'No build needed'",
+  "installCommand": "",
   "outputDirectory": "web",
   "cleanUrls": true,
   "trailingSlash": false
