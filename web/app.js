@@ -1,14 +1,29 @@
-// BTCONNECT Web - Core Application Logic
+// BTCONNECT Web - Protocolo Pybricks Completo
 let editor;
 let device;
 let server;
 let pybricksService;
 let commandChar;
+let capabilitiesChar;
 let isConnected = false;
+let hubCapabilities = null;
 
-// UUIDs for Pybricks
-const PYBRICKS_SERVICE_UUID = 'c5f21234-55ac-4700-85c4-c2c6b36a7665';
-const PYBRICKS_COMMAND_UUID = 'c5f20002-55ac-4700-85c4-c2c6b36a7665';
+// UUIDs oficiales de Pybricks
+const PYBRICKS_SERVICE_UUID = 'c5f50001-8280-46da-89f4-6d8051e4aeef';
+const PYBRICKS_COMMAND_UUID = 'c5f50002-8280-46da-89f4-6d8051e4aeef';
+const PYBRICKS_HUB_CAPABILITIES_UUID = 'c5f50003-8280-46da-89f4-6d8051e4aeef';
+
+// Comandos del protocolo Pybricks
+const CMD_STOP_USER_PROGRAM = 0;
+const CMD_START_USER_PROGRAM = 1;
+const CMD_START_REPL = 2;
+const CMD_WRITE_USER_PROGRAM_META = 3;
+const CMD_WRITE_USER_RAM = 4;
+const CMD_WRITE_STDIN = 6;
+
+// Eventos del protocolo
+const EVENT_STATUS_REPORT = 0;
+const EVENT_WRITE_STDOUT = 1;
 
 // Monaco Editor Initialization
 window.onload = () => {
@@ -21,7 +36,7 @@ window.onload = () => {
                 '',
                 'hub = PrimeHub()',
                 'hub.light.on((0, 255, 0))',
-                'print("Hello from Web Bluetooth!")',
+                'print("¡Hola desde BTCONNECT Web!")',
                 'wait(2000)',
                 'hub.light.off()',
             ].join('\n'),
@@ -37,7 +52,6 @@ window.onload = () => {
             padding: { top: 16 }
         });
     });
-
     setupUIListeners();
 };
 
@@ -46,21 +60,23 @@ function setupUIListeners() {
     document.getElementById('runBtn').addEventListener('click', runScript);
     document.getElementById('stopBtn').addEventListener('click', stopScript);
     document.getElementById('clearBtn').addEventListener('click', () => {
-        document.getElementById('console').innerHTML = '<div class="text-gray-500 italic">Console output cleared.</div>';
+        document.getElementById('console').innerHTML = '<div class="text-gray-500 italic">Consola limpiada.</div>';
     });
 }
 
 function logToConsole(message, type = 'info') {
     const consoleEl = document.getElementById('console');
-    const colorClass = type === 'error' ? 'text-red-400' : (type === 'success' ? 'text-green-400' : 'text-gray-300');
+    const colorClass = type === 'error' ? 'text-red-400' : (type === 'success' ? 'text-green-400' : (type === 'warn' ? 'text-yellow-400' : 'text-gray-300'));
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    // Auto-remove placeholder if first message
-    if (consoleEl.innerHTML.includes('will appear here')) consoleEl.innerHTML = '';
-
+    
+    if (consoleEl.innerHTML.includes('will appear here') || consoleEl.innerHTML.includes('limpiada')) {
+        consoleEl.innerHTML = '';
+    }
+    
     const div = document.createElement('div');
     div.className = `flex gap-3 px-1`;
-    div.innerHTML = `<span class="text-gray-500">[${time}]</span> <span class="${colorClass}">${message}</span>`;
+    const prefix = type === 'error' ? '❌' : (type === 'success' ? '✅' : (type === 'warn' ? '⚠️' : 'ℹ️'));
+    div.innerHTML = `<span class="text-gray-500">[${time}]</span> <span>${prefix}</span> <span class="${colorClass}">${message}</span>`;
     consoleEl.appendChild(div);
     consoleEl.scrollTop = consoleEl.scrollHeight;
 }
@@ -75,30 +91,47 @@ async function toggleConnect() {
 
 async function connect() {
     try {
-        logToConsole("Requesting Bluetooth device...", "info");
-
+        logToConsole('Solicitando dispositivo Bluetooth...', 'info');
+        
         device = await navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'Pybricks' }],
             optionalServices: [PYBRICKS_SERVICE_UUID]
         });
-
-        logToConsole(`Connecting to ${device.name}...`, "info");
+        
+        logToConsole(`Conectando a ${device.name}...`, 'info');
         device.addEventListener('gattserverdisconnected', onDisconnected);
-
+        
         server = await device.gatt.connect();
         pybricksService = await server.getPrimaryService(PYBRICKS_SERVICE_UUID);
+        
+        // Leer capabilities del hub
+        logToConsole('Leyendo capacidades del hub...', 'info');
+        capabilitiesChar = await pybricksService.getCharacteristic(PYBRICKS_HUB_CAPABILITIES_UUID);
+        const capData = await capabilitiesChar.readValue();
+        hubCapabilities = parseHubCapabilities(capData);
+        logToConsole(`Tamaño máximo de escritura: ${hubCapabilities.maxCharSize} bytes`, 'success');
+        logToConsole(`Tamaño máximo de programa: ${hubCapabilities.maxUserProgSize} bytes`, 'success');
+        
+        // Obtener characteristic de comandos
         commandChar = await pybricksService.getCharacteristic(PYBRICKS_COMMAND_UUID);
-
-        // Start notifications for output
+        
+        // Suscribirse a notificaciones para output
         await commandChar.startNotifications();
         commandChar.addEventListener('characteristicvaluechanged', handleOutput);
-
+        
         setConnectedState(true);
-        logToConsole("Successfully connected to Hub!", "success");
+        logToConsole('¡Conectado exitosamente al hub!', 'success');
     } catch (error) {
-        logToConsole(`Connection error: ${error.message}`, "error");
+        logToConsole(`Error de conexión: ${error.message}`, 'error');
         console.error(error);
     }
+}
+
+function parseHubCapabilities(dataView) {
+    const maxCharSize = dataView.getUint16(0, true);
+    const flags = dataView.getUint32(2, true);
+    const maxUserProgSize = dataView.getUint32(6, true);
+    return { maxCharSize, flags, maxUserProgSize };
 }
 
 async function disconnect() {
@@ -109,7 +142,7 @@ async function disconnect() {
 
 function onDisconnected() {
     setConnectedState(false);
-    logToConsole("Disconnected from Hub.", "info");
+    logToConsole('Desconectado del hub.', 'info');
 }
 
 function setConnectedState(connected) {
@@ -118,16 +151,16 @@ function setConnectedState(connected) {
     const statusText = document.getElementById('connStatusText');
     const runBtn = document.getElementById('runBtn');
     const stopBtn = document.getElementById('stopBtn');
-
+    
     if (connected) {
         connectBtn.classList.add('border-green-500/50', 'bg-green-500/10');
-        statusText.innerText = "Connected";
+        statusText.innerText = 'Conectado';
         statusText.classList.add('text-green-400');
         runBtn.disabled = false;
         stopBtn.disabled = false;
     } else {
         connectBtn.classList.remove('border-green-500/50', 'bg-green-500/10');
-        statusText.innerText = "Connect Hub";
+        statusText.innerText = 'Conectar Hub';
         statusText.classList.remove('text-green-400');
         runBtn.disabled = true;
         stopBtn.disabled = true;
@@ -136,63 +169,89 @@ function setConnectedState(connected) {
 
 function handleOutput(event) {
     const value = event.target.value;
-    const decoder = new TextDecoder();
-    const text = decoder.decode(value);
-
-    // Pybricks sends a mix of protocol packets and raw text
-    // For now, we'll just log anything that looks like text
-    if (text.length > 0) {
-        // Simple filter for raw UART-like output
-        // Protocol packets usually start with non-printable bytes
-        const cleanText = text.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
-        if (cleanText) logToConsole(cleanText, 'success');
+    const eventType = value.getUint8(0);
+    
+    if (eventType === EVENT_WRITE_STDOUT) {
+        // Event 1: STDOUT del programa
+        const decoder = new TextDecoder();
+        const text = decoder.decode(new Uint8Array(value.buffer, 1));
+        if (text.trim()) {
+            logToConsole(text.trim(), 'success');
+        }
+    } else if (eventType === EVENT_STATUS_REPORT) {
+        // Event 0: Status report - ignorar por ahora
+        console.log('Status report recibido');
     }
 }
 
 async function runScript() {
-    if (!isConnected || !commandChar) return;
-
+    if (!isConnected || !commandChar || !hubCapabilities) return;
+    
     const code = editor.getValue();
-    logToConsole("Uploading and running script...", "info");
-
+    const encoder = new TextEncoder();
+    const codeBytes = encoder.encode(code);
+    
+    logToConsole('Subiendo programa...', 'info');
+    
     try {
-        // Pybricks protocol for running a script:
-        // 1. Send start command (0x01)
-        // 2. Send script data in chunks
-        // 3. Send stop command (0x03)?
-        // Actually, many hubs just take the raw code if you prefix it correctly.
-
-        const encoder = new TextEncoder();
-        const codeBytes = encoder.encode(code);
-
-        // This is a simplified version of the Pybricks upload protocol
-        // In a full implementation, we'd handle flow control and checksums
-        const payload = new Uint8Array(codeBytes.length + 1);
-        payload[0] = 0x01; // Command: Run Script
-        payload.set(codeBytes, 1);
-
-        // Max BLE write size is usually 20-251 bytes. We'll chunk it at 20 for safety.
-        const CHUNK_SIZE = 20;
-        for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
-            const chunk = payload.slice(i, i + CHUNK_SIZE);
-            await commandChar.writeValue(chunk);
+        // Paso 1: Detener programa anterior si existe
+        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
+        await sleep(100);
+        
+        // Paso 2: Enviar metadata (tamaño del programa)
+        const metaData = new Uint8Array(5);
+        metaData[0] = CMD_WRITE_USER_PROGRAM_META;
+        new DataView(metaData.buffer).setUint32(1, codeBytes.length, true);
+        await commandChar.writeValueWithoutResponse(metaData);
+        logToConsole(`Metadata enviada: ${codeBytes.length} bytes`, 'info');
+        
+        // Paso 3: Enviar código en chunks
+        const maxPayloadSize = hubCapabilities.maxCharSize - 5; // 1 byte comando + 4 bytes offset
+        let offset = 0;
+        let chunkCount = 0;
+        
+        while (offset < codeBytes.length) {
+            const chunkSize = Math.min(maxPayloadSize, codeBytes.length - offset);
+            const chunk = new Uint8Array(5 + chunkSize);
+            chunk[0] = CMD_WRITE_USER_RAM;
+            new DataView(chunk.buffer).setUint32(1, offset, true);
+            chunk.set(codeBytes.slice(offset, offset + chunkSize), 5);
+            
+            await commandChar.writeValueWithoutResponse(chunk);
+            offset += chunkSize;
+            chunkCount++;
+            
+            // Pequeña pausa para no saturar el BLE
+            if (chunkCount % 10 === 0) {
+                await sleep(10);
+            }
         }
-
-        logToConsole("Script execution started!", "success");
+        
+        logToConsole(`Código subido en ${chunkCount} chunks`, 'success');
+        
+        // Paso 4: Iniciar ejecución del programa
+        await sleep(100);
+        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
+        logToConsole('¡Programa iniciado!', 'success');
+        
     } catch (error) {
-        logToConsole(`Run error: ${error.message}`, "error");
+        logToConsole(`Error al ejecutar: ${error.message}`, 'error');
+        console.error(error);
     }
 }
 
 async function stopScript() {
     if (!isConnected || !commandChar) return;
-
+    
     try {
-        logToConsole("Stopping script...", "info");
-        // Command 0x02 is usually "Stop/Cancel"
-        await commandChar.writeValue(new Uint8Array([0x02]));
-        logToConsole("Script stopped.", "info");
+        logToConsole('Deteniendo programa...', 'info');
+        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
+        logToConsole('Programa detenido.', 'success');
     } catch (error) {
-        logToConsole(`Stop error: ${error.message}`, "error");
+        logToConsole(`Error al detener: ${error.message}`, 'error');
     }
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
