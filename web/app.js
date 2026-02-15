@@ -3,13 +3,14 @@ let device;
 let server;
 let commandChar;
 let isConnected = false;
-let hubCapabilities = { maxCharSize: 20 }; // Valor por defecto seguro
+// Capacidad segura por defecto para BLE
+let hubCapabilities = { maxCharSize: 20 };
 
 // UUIDs Pybricks
 const PYBRICKS_SERVICE_UUID = 'c5f50001-8280-46da-89f4-6d8051e4aeef';
 const PYBRICKS_COMMAND_UUID = 'c5f50002-8280-46da-89f4-6d8051e4aeef';
 
-// Comandos
+// Comandos del Protocolo
 const CMD_STOP_USER_PROGRAM = 0;
 const CMD_START_USER_PROGRAM = 1;
 const CMD_WRITE_USER_PROGRAM_META = 3;
@@ -26,10 +27,11 @@ require(['vs/editor/editor.main'], function () {
             'from pybricks.hubs import PrimeHub',
             'from pybricks.tools import wait',
             '',
+            '# Inicializar Hub',
             'hub = PrimeHub()',
             'hub.light.on((0, 255, 0))',
             'print("Hola desde BTCONNECT")',
-            'wait(1000)',
+            'wait(2000)',
             'hub.light.off()'
         ].join('\n'),
         language: 'python',
@@ -38,7 +40,7 @@ require(['vs/editor/editor.main'], function () {
     });
 });
 
-// Configuración de botones (Esperamos a que cargue la ventana)
+// Configuración de botones
 window.addEventListener('load', () => {
     document.getElementById('connectBtn').addEventListener('click', toggleConnect);
     document.getElementById('runBtn').addEventListener('click', runScript);
@@ -108,28 +110,34 @@ function updateUI(connected) {
 async function runScript() {
     if (!isConnected) return;
 
-    // 1. OBTENER CÓDIGO CORRECTAMENTE DESDE MONACO
-    const code = editor.getValue();
+    // 1. SANITIZAR CÓDIGO: Convertir CRLF (Windows) a LF (Unix/Hub)
+    // Esto es crucial para que el tamaño en bytes coincida exactamente
+    const rawCode = editor.getValue();
+    const code = rawCode.replace(/\r\n/g, '\n');
+
     const codeBytes = new TextEncoder().encode(code);
     const size = codeBytes.length;
 
     logToConsole(`Iniciando subida (${size} bytes)...`, 'info');
 
     try {
-        // A. Detener programa previo
+        // A. Detener programa previo y ESPERAR
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 200)); // Espera aumentada a 200ms
 
-        // B. Enviar METADATA con el TAMAÑO REAL (Crucial)
-        // El formato es: [CMD, Size (Little Endian uint32)]
+        // B. Enviar METADATA con el TAMAÑO REAL
         const meta = new ArrayBuffer(5);
         const view = new DataView(meta);
         view.setUint8(0, CMD_WRITE_USER_PROGRAM_META);
-        view.setUint32(1, size, true); // true = Little Endian
+        view.setUint32(1, size, true); // Little Endian
         await commandChar.writeValueWithoutResponse(meta);
 
+        // Espera técnica para que el Hub procese la metadata
+        await new Promise(r => setTimeout(r, 50));
+
         // C. Enviar CÓDIGO en trozos (Chunks)
-        const maxChunk = hubCapabilities.maxCharSize - 5; // Margen de seguridad
+        // Usamos 15 bytes por paquete para ser extremadamente conservadores y evitar pérdidas
+        const maxChunk = 15;
         let offset = 0;
 
         while (offset < size) {
@@ -137,19 +145,19 @@ async function runScript() {
             const packet = new ArrayBuffer(5 + chunkPayloadSize);
             const packetView = new DataView(packet);
 
-            // Cabecera del chunk: [CMD, Offset (Little Endian uint32)]
+            // Cabecera: [CMD, Offset (Little Endian uint32)]
             packetView.setUint8(0, CMD_WRITE_USER_RAM);
             packetView.setUint32(1, offset, true);
 
-            // Copiar datos del script
+            // Datos
             const chunkData = codeBytes.slice(offset, offset + chunkPayloadSize);
             new Uint8Array(packet, 5).set(chunkData);
 
             await commandChar.writeValueWithoutResponse(packet);
             offset += chunkPayloadSize;
 
-            // Pausa pequeña para estabilidad BLE
-            await new Promise(r => setTimeout(r, 20));
+            // Pausa entre paquetes para evitar saturar el buffer del Hub
+            await new Promise(r => setTimeout(r, 30));
         }
 
         logToConsole('Subida completada. Ejecutando...', 'success');
@@ -166,7 +174,6 @@ async function stopScript() {
     if (isConnected) await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
 }
 
-// Funciones de archivo
 function saveCode() {
     const blob = new Blob([editor.getValue()], { type: 'text/plain' });
     const a = document.createElement('a');
