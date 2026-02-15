@@ -51,22 +51,41 @@ window.onload = () => {
             cursorSmoothCaretAnimation: "on",
             padding: { top: 16 }
         });
+        window.editor = editor; // Hacerlo accesible globalmente
     });
 };
-setupUIListeners();
+
+// Asegurar que setupUIListeners se ejecute solo cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupUIListeners);
+} else {
+    setupUIListeners();
+}
 
 function setupUIListeners() {
-    document.getElementById('connectBtn').addEventListener('click', toggleConnect);
-    document.getElementById('runBtn').addEventListener('click', runScript);
-    document.getElementById('stopBtn').addEventListener('click', stopScript);
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        document.getElementById('consoleOutput').innerHTML = '';
-    });
-    document.getElementById('uploadBtn').addEventListener('click', () => {
-        document.getElementById('fileInput').click();
-    });    document.getElementById('saveBtn').addEventListener('click', saveCode);
-    document.getElementById('fileInput').addEventListener('change', loadFile);
-    });
+    const connectBtn = document.getElementById('connectBtn');
+    const runBtn = document.getElementById('runBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    if (connectBtn) connectBtn.addEventListener('click', toggleConnect);
+    if (runBtn) runBtn.addEventListener('click', runScript);
+    if (stopBtn) stopBtn.addEventListener('click', stopScript);
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            document.getElementById('consoleOutput').innerHTML = '';
+        });
+    }
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+    }
+    if (saveBtn) saveBtn.addEventListener('click', saveCode);
+    if (fileInput) fileInput.addEventListener('change', loadFile);
 }
 
 function logToConsole(message, type = 'info') {
@@ -128,7 +147,12 @@ async function connect() {
         setConnectedState(true);
         logToConsole('¡Conectado exitosamente al hub!', 'success');
     } catch (error) {
-        logToConsole(`Error de conexión: ${error.message}`, 'error');
+        if (error.name === 'NotFoundError') {
+            logToConsole('Conexión cancelada por el usuario.', 'warn');
+        } else {
+            logToConsole(`Error de conexión: ${error.message}`, 'error');
+        }
+        setConnectedState(false);
         console.error(error);
     }
 }
@@ -160,16 +184,20 @@ function setConnectedState(connected) {
     
     if (connected) {
         connectBtn.classList.add('border-green-500/50', 'bg-green-500/10');
-        statusText.innerText = 'Conectado';
-        statusText.classList.add('text-green-400');
-        runBtn.disabled = false;
-        stopBtn.disabled = false;
+        if (statusText) {
+            statusText.innerText = 'Conectado';
+            statusText.classList.add('text-green-400');
+        }
+        if (runBtn) runBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = false;
     } else {
         connectBtn.classList.remove('border-green-500/50', 'bg-green-500/10');
-        statusText.innerText = 'Conectar Hub';
-        statusText.classList.remove('text-green-400');
-        runBtn.disabled = true;
-        stopBtn.disabled = true;
+        if (statusText) {
+            statusText.innerText = 'Conectar Hub';
+            statusText.classList.remove('text-green-400');
+        }
+        if (runBtn) runBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = true;
     }
 }
 
@@ -193,30 +221,40 @@ function handleOutput(event) {
 async function runScript() {
     if (!isConnected || !commandChar || !hubCapabilities) return;
     
-        const code = document.getElementById('codeEditor').value;
+    // Extraer texto correctamente desde Monaco Editor usando window.editor.getValue()
+    const code = window.editor ? window.editor.getValue() : "";
     const encoder = new TextEncoder();
+    // Convertir el script a un array de bytes (UTF-8) para calcular el tamaño real
     const codeBytes = encoder.encode(code);
+    const scriptSize = codeBytes.length;
     
-    logToConsole('Subiendo programa...', 'info');
+    logToConsole(`Preparando subida: ${scriptSize} bytes`, 'info');
     
     try {
-        // Paso 1: Detener programa anterior si existe
+        // Secuencia de Control: Paso 1: STOP_USER_PROGRAM -> Esperar confirmación
+        logToConsole('Deteniendo programa actual...', 'info');
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
         await sleep(100);
         
-        // Paso 2: Enviar metadata (tamaño del programa) (size = 0 para limpiar)
+        // Secuencia de Control: Paso 2: START_USER_PROGRAM_METADATA (con tamaño real)
+        // Modificar el Uint8Array de metadatos para incluir el tamaño real (Little-endian)
         const metaData = new Uint8Array(5);
         metaData[0] = CMD_WRITE_USER_PROGRAM_META;
-        new DataView(metaData.buffer).setUint32(1, 0, true); // Size = 0 para limpiar flash        await commandChar.writeValueWithoutResponse(metaData);
-        logToConsole(`Metadata enviada: ${codeBytes.length} bytes`, 'info');
+        const view = new DataView(metaData.buffer);
+        view.setUint32(1, scriptSize, true); // Tamaño real del script en Little-endian
         
-        // Paso 3: Enviar código en chunks
+        await commandChar.writeValueWithoutResponse(metaData);
+        logToConsole(`Metadata enviada: ${scriptSize} bytes`, 'info');
+        await sleep(50);
+        
+        // Secuencia de Control: Paso 3: Envío de fragmentos (chunks) respetando el maxCharSize (MTU)
         const maxPayloadSize = hubCapabilities.maxCharSize - 5; // 1 byte comando + 4 bytes offset
         let offset = 0;
         let chunkCount = 0;
         
-        while (offset < codeBytes.length) {
-            const chunkSize = Math.min(maxPayloadSize, codeBytes.length - offset);
+        logToConsole('Subiendo chunks al hub...', 'info');
+        while (offset < scriptSize) {
+            const chunkSize = Math.min(maxPayloadSize, scriptSize - offset);
             const chunk = new Uint8Array(5 + chunkSize);
             chunk[0] = CMD_WRITE_USER_RAM;
             new DataView(chunk.buffer).setUint32(1, offset, true);
@@ -226,27 +264,21 @@ async function runScript() {
             offset += chunkSize;
             chunkCount++;
             
-            // Pequeña pausa para no saturar el BLE
+            // Pausa estratégica para no saturar el canal BLE
             if (chunkCount % 10 === 0) {
                 await sleep(10);
             }
         }
         
-        logToConsole(`Código subido en ${chunkCount} chunks`, 'success');
+        logToConsole(`Código subido: ${chunkCount} chunks enviados.`, 'success');
         
-        // Paso 5: Iniciar ejecución del programa        await sleep(100);
+        // Paso Final: Iniciar ejecución del programa
+        await sleep(100);
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
-
-                // Paso 4: Enviar metadata final (confirmar grabado permanente en flash)
-                const finalMetaData = new Uint8Array(5);
-                finalMetaData[0] = CMD_WRITE_USER_PROGRAM_META;
-                new DataView(finalMetaData.buffer).setUint32(1, codeBytes.length, true);
-                await commandChar.writeValueWithoutResponse(finalMetaData);
-                logToConsole('Programa grabado en la flash del hub', 'success');
-        logToConsole('¡Programa iniciado!', 'success');
+        logToConsole('¡Programa iniciado con éxito!', 'success');
         
     } catch (error) {
-        logToConsole(`Error al ejecutar: ${error.message}`, 'error');
+        logToConsole(`Error en la subida: ${error.message}`, 'error');
         console.error(error);
     }
 }
@@ -267,10 +299,11 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
 // File Management Functions
 function saveCode() {
-    const code = editor.getValue();    const blob = new Blob([code], { type: 'text/plain' });
+    if (!window.editor) return;
+    const code = window.editor.getValue();
+    const blob = new Blob([code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -282,10 +315,11 @@ function saveCode() {
 
 function loadFile(event) {
     const file = event.target.files[0];
-    if (file) {
+    if (file && window.editor) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            editor.setValue(e.target.result);            logToConsole(`Archivo cargado: ${file.name}`, 'success');
+            window.editor.setValue(e.target.result);
+            logToConsole(`Archivo cargado: ${file.name}`, 'success');
         };
         reader.readAsText(file);
     }
