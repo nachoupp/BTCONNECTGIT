@@ -60,11 +60,11 @@ function setupUIListeners() {
     document.getElementById('runBtn').addEventListener('click', runScript);
     document.getElementById('stopBtn').addEventListener('click', stopScript);
     document.getElementById('clearBtn').addEventListener('click', () => {
-                document.getElementById('consoleOutput').innerHTML = '';
-            document.getElementById('uploadBtn').addEventListener('click', () => {
-        document.getElementById('fileInput').click();
+        document.getElementById('consoleOutput').innerHTML = '';
     });
-    document.getElementById('saveBtn').addEventListener('click', saveCode);
+    document.getElementById('uploadBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });    document.getElementById('saveBtn').addEventListener('click', saveCode);
     document.getElementById('fileInput').addEventListener('change', loadFile);
     });
 }
@@ -270,8 +270,7 @@ function sleep(ms) {
 
 // File Management Functions
 function saveCode() {
-    const code = document.getElementById('codeEditor').value;
-    const blob = new Blob([code], { type: 'text/plain' });
+    const code = editor.getValue();    const blob = new Blob([code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -286,8 +285,7 @@ function loadFile(event) {
     if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            document.getElementById('codeEditor').value = e.target.result;
-            logToConsole(`Archivo cargado: ${file.name}`, 'success');
+            editor.setValue(e.target.result);            logToConsole(`Archivo cargado: ${file.name}`, 'success');
         };
         reader.readAsText(file);
     }
