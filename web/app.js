@@ -120,7 +120,7 @@ async function runScript() {
             offset += chunkSize;
 
             // Pausa mínima necesaria para que el stack Bluetooth respire
-            // 20ms es suficiente, 500ms es demasiado (causa el GATT Error)
+            // 20ms es suficiente para evitar GATT ERROR
             await new Promise(r => setTimeout(r, 20));
         }
 
