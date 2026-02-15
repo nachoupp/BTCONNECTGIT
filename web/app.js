@@ -1,5 +1,6 @@
 let editor, device, server, commandChar, isConnected = false;
-let hubCapabilities = { maxCharSize: 20 };
+// Usamos 20 bytes para ir a lo seguro en cualquier navegador/OS
+const CHUNK_SIZE = 20;
 
 const SERVICE_UUID = 'c5f50001-8280-46da-89f4-6d8051e4aeef';
 const CHAR_UUID = 'c5f50002-8280-46da-89f4-6d8051e4aeef';
@@ -17,10 +18,11 @@ require(['vs/editor/editor.main'], () => {
             'from pybricks.hubs import PrimeHub',
             'from pybricks.tools import wait',
             '',
+            '# Codigo Web App',
             'hub = PrimeHub()',
-            'print("Hello BTCONNECT!")',
-            'hub.display.text("OK")',
-            'wait(2000)'
+            'hub.display.char("W")',
+            'print("Web App funcionando!")',
+            'wait(1000)'
         ].join('\n'),
         language: 'python',
         theme: 'vs-dark',
@@ -66,7 +68,8 @@ async function toggleConnect() {
             commandChar.addEventListener('characteristicvaluechanged', (e) => {
                 const view = e.target.value;
                 if (view.getUint8(0) === 1) { // STDOUT
-                    log(new TextDecoder().decode(new DataView(view.buffer, 1)), 'success');
+                    const msg = new TextDecoder().decode(new DataView(view.buffer, 1));
+                    log(msg, 'success');
                 }
             });
             isConnected = true; updateUI(); log('¡Conectado!', 'success');
@@ -85,47 +88,53 @@ function updateUI() {
 async function runScript() {
     if (!isConnected) return;
 
-    // 1. PREPARAR CÓDIGO (Sanitizar saltos de línea es CLAVE)
+    // 1. LIMPIEZA Y PREPARACIÓN
     const raw = editor.getValue();
-    const code = raw.replace(/\r\n/g, '\n'); // Convertir Windows CRLF a Unix LF
+    const code = raw.replace(/\r\n/g, '\n'); // Normalizar saltos de línea
     const bytes = new TextEncoder().encode(code);
     const size = bytes.length;
 
-    log(`Subiendo ${size} bytes...`);
+    log(`Iniciando subida de ${size} bytes...`);
 
     try {
-        // A. STOP (Rápido)
-        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP]));
-        await new Promise(r => setTimeout(r, 100)); // Espera breve estándar
+        // A. DETENER PROGRAMA (Stop)
+        // Usamos writeValueWithResponse para asegurarnos de que el hub ha parado
+        await commandChar.writeValueWithResponse(new Uint8Array([CMD_STOP]));
 
-        // B. METADATA (Tamaño real)
+        // B. ENVIAR METADATA (El "Handshake" crítico)
+        // CAMBIO CLAVE: Usamos writeValueWithResponse aquí.
+        // Esto obliga al navegador a esperar el ACK del Hub antes de seguir.
         const meta = new ArrayBuffer(5);
         new DataView(meta).setUint8(0, CMD_META);
         new DataView(meta).setUint32(1, size, true); // Little Endian
-        await commandChar.writeValueWithoutResponse(meta);
+        await commandChar.writeValueWithResponse(meta);
 
-        // C. CHUNKS (Optimizado para no saturar pero no dormir)
-        const maxChunk = 18; // Seguro para BLE estándar
+        log('Metadata aceptada. Enviando código...');
+
+        // C. ENVIAR CHUNKS (Datos)
+        // Calculamos payload seguro: MTU (20) - 5 bytes de cabecera = 15 bytes de datos
+        const maxPayload = 15;
         let offset = 0;
 
         while (offset < size) {
-            const chunkSize = Math.min(maxChunk, size - offset);
-            const packet = new ArrayBuffer(5 + chunkSize);
+            const chunkPayloadSize = Math.min(maxPayload, size - offset);
+            const packet = new ArrayBuffer(5 + chunkPayloadSize);
 
             new DataView(packet).setUint8(0, CMD_RAM);
-            new DataView(packet).setUint32(1, offset, true);
-            new Uint8Array(packet, 5).set(bytes.slice(offset, offset + chunkSize));
+            new DataView(packet).setUint32(1, offset, true); // Offset actual
+            new Uint8Array(packet, 5).set(bytes.slice(offset, offset + chunkPayloadSize));
 
+            // Aquí usamos WithoutResponse para velocidad, pero con un pequeño delay
             await commandChar.writeValueWithoutResponse(packet);
-            offset += chunkSize;
 
-            // Pausa mínima necesaria para que el stack Bluetooth respire
-            // 20ms es suficiente para evitar GATT ERROR
-            await new Promise(r => setTimeout(r, 20));
+            offset += chunkPayloadSize;
+            // Pequeña pausa técnica para no saturar el buffer BLE del Hub
+            await new Promise(r => setTimeout(r, 15));
         }
 
-        log('Ejecutando...', 'success');
-        // D. START
+        log('Subida completa. Ejecutando...', 'success');
+
+        // D. EJECUTAR (Start)
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START]));
 
     } catch (e) {
