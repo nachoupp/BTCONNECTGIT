@@ -3,7 +3,7 @@ let device;
 let server;
 let commandChar;
 let isConnected = false;
-// Capacidad segura por defecto para BLE
+// Reducimos el tamaño del paquete por seguridad
 let hubCapabilities = { maxCharSize: 20 };
 
 // UUIDs Pybricks
@@ -26,13 +26,15 @@ require(['vs/editor/editor.main'], function () {
         value: [
             'from pybricks.hubs import PrimeHub',
             'from pybricks.tools import wait',
+            'from pybricks.parameters import Color',
             '',
-            '# Inicializar Hub',
+            '# Codigo Nuevo',
+            'print("PROGRAMA NUEVO INICIADO")',
             'hub = PrimeHub()',
-            'hub.light.on((0, 255, 0))',
-            'print("Hola desde BTCONNECT")',
+            'hub.display.char("A")',
+            'hub.light.on(Color.GREEN)',
             'wait(2000)',
-            'hub.light.off()'
+            'print("Fin del programa")'
         ].join('\n'),
         language: 'python',
         theme: 'vs-dark',
@@ -110,33 +112,32 @@ function updateUI(connected) {
 async function runScript() {
     if (!isConnected) return;
 
-    // 1. SANITIZAR CÓDIGO: Convertir CRLF (Windows) a LF (Unix/Hub)
-    // Esto es crucial para que el tamaño en bytes coincida exactamente
     const rawCode = editor.getValue();
+    // Normalizar saltos de línea para contar bytes exactos
     const code = rawCode.replace(/\r\n/g, '\n');
-
     const codeBytes = new TextEncoder().encode(code);
     const size = codeBytes.length;
 
     logToConsole(`Iniciando subida (${size} bytes)...`, 'info');
 
     try {
-        // A. Detener programa previo y ESPERAR
+        // 1. DETENER (Tiempo extendido)
+        // Damos tiempo al hub para frenar motores y cerrar procesos
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
-        await new Promise(r => setTimeout(r, 200)); // Espera aumentada a 200ms
+        await new Promise(r => setTimeout(r, 500));
 
-        // B. Enviar METADATA con el TAMAÑO REAL
+        // 2. ENVIAR METADATA (Informar tamaño)
         const meta = new ArrayBuffer(5);
         const view = new DataView(meta);
         view.setUint8(0, CMD_WRITE_USER_PROGRAM_META);
         view.setUint32(1, size, true); // Little Endian
         await commandChar.writeValueWithoutResponse(meta);
 
-        // Espera técnica para que el Hub procese la metadata
-        await new Promise(r => setTimeout(r, 50));
+        // PAUSA CRÍTICA: El Hub necesita tiempo para preparar la RAM/Flash
+        await new Promise(r => setTimeout(r, 200));
 
-        // C. Enviar CÓDIGO en trozos (Chunks)
-        // Usamos 15 bytes por paquete para ser extremadamente conservadores y evitar pérdidas
+        // 3. ENVIAR CODIGO (Chunks lentos)
+        // Usamos chunks muy pequeños para asegurar estabilidad
         const maxChunk = 15;
         let offset = 0;
 
@@ -145,25 +146,28 @@ async function runScript() {
             const packet = new ArrayBuffer(5 + chunkPayloadSize);
             const packetView = new DataView(packet);
 
-            // Cabecera: [CMD, Offset (Little Endian uint32)]
             packetView.setUint8(0, CMD_WRITE_USER_RAM);
             packetView.setUint32(1, offset, true);
 
-            // Datos
             const chunkData = codeBytes.slice(offset, offset + chunkPayloadSize);
             new Uint8Array(packet, 5).set(chunkData);
 
             await commandChar.writeValueWithoutResponse(packet);
             offset += chunkPayloadSize;
 
-            // Pausa entre paquetes para evitar saturar el buffer del Hub
-            await new Promise(r => setTimeout(r, 30));
+            // Pausa entre paquetes (50ms es lento pero seguro)
+            await new Promise(r => setTimeout(r, 50));
         }
 
-        logToConsole('Subida completada. Ejecutando...', 'success');
+        logToConsole('Subida completada. Esperando guardado...', 'info');
 
-        // D. Arrancar programa
+        // 4. ESPERA FINAL ANTES DE ARRANCAR
+        // Dar tiempo a que el último paquete se escriba en memoria
+        await new Promise(r => setTimeout(r, 1000));
+
+        // 5. ARRANCAR
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
+        logToConsole('Comando de arranque enviado.', 'success');
 
     } catch (e) {
         logToConsole('Error subida: ' + e.message, 'error');
