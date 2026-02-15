@@ -204,11 +204,10 @@ async function runScript() {
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
         await sleep(100);
         
-        // Paso 2: Enviar metadata (tamaño del programa)
+        // Paso 2: Enviar metadata (tamaño del programa) (size = 0 para limpiar)
         const metaData = new Uint8Array(5);
         metaData[0] = CMD_WRITE_USER_PROGRAM_META;
-        new DataView(metaData.buffer).setUint32(1, codeBytes.length, true);
-        await commandChar.writeValueWithoutResponse(metaData);
+        new DataView(metaData.buffer).setUint32(1, 0, true); // Size = 0 para limpiar flash        await commandChar.writeValueWithoutResponse(metaData);
         logToConsole(`Metadata enviada: ${codeBytes.length} bytes`, 'info');
         
         // Paso 3: Enviar código en chunks
@@ -235,9 +234,15 @@ async function runScript() {
         
         logToConsole(`Código subido en ${chunkCount} chunks`, 'success');
         
-        // Paso 4: Iniciar ejecución del programa
-        await sleep(100);
+        // Paso 5: Iniciar ejecución del programa        await sleep(100);
         await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
+
+                // Paso 4: Enviar metadata final (confirmar grabado permanente en flash)
+                const finalMetaData = new Uint8Array(5);
+                finalMetaData[0] = CMD_WRITE_USER_PROGRAM_META;
+                new DataView(finalMetaData.buffer).setUint32(1, codeBytes.length, true);
+                await commandChar.writeValueWithoutResponse(finalMetaData);
+                logToConsole('Programa grabado en la flash del hub', 'success');
         logToConsole('¡Programa iniciado!', 'success');
         
     } catch (error) {
