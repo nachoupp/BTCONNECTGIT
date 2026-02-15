@@ -3,7 +3,6 @@ let device;
 let server;
 let commandChar;
 let isConnected = false;
-// Reducimos el tamaño del paquete por seguridad
 let hubCapabilities = { maxCharSize: 20 };
 
 // UUIDs Pybricks
@@ -28,13 +27,14 @@ require(['vs/editor/editor.main'], function () {
             'from pybricks.tools import wait',
             'from pybricks.parameters import Color',
             '',
-            '# Codigo Nuevo',
-            'print("PROGRAMA NUEVO INICIADO")',
+            '# --- CODIGO ULTRA-ARMADO ---',
+            'print(">>> PROGRAMA NUEVO CARGADO <<<")',
             'hub = PrimeHub()',
             'hub.display.char("A")',
             'hub.light.on(Color.GREEN)',
             'wait(2000)',
-            'print("Fin del programa")'
+            'hub.light.on(Color.BLUE)',
+            'print(">>> Script finalizado con exito <<<")'
         ].join('\n'),
         language: 'python',
         theme: 'vs-dark',
@@ -42,7 +42,6 @@ require(['vs/editor/editor.main'], function () {
     });
 });
 
-// Configuración de botones
 window.addEventListener('load', () => {
     document.getElementById('connectBtn').addEventListener('click', toggleConnect);
     document.getElementById('runBtn').addEventListener('click', runScript);
@@ -75,14 +74,13 @@ async function toggleConnect() {
             device.addEventListener('gattserverdisconnected', () => {
                 isConnected = false;
                 updateUI(false);
-                logToConsole('Desconectado.', 'info');
+                logToConsole('Hub desconectado.', 'info');
             });
 
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService(PYBRICKS_SERVICE_UUID);
             commandChar = await service.getCharacteristic(PYBRICKS_COMMAND_UUID);
 
-            // Suscribirse a notificaciones (STDOUT)
             await commandChar.startNotifications();
             commandChar.addEventListener('characteristicvaluechanged', (e) => {
                 const view = e.target.value;
@@ -94,10 +92,10 @@ async function toggleConnect() {
 
             isConnected = true;
             updateUI(true);
-            logToConsole('¡Conectado!', 'success');
+            logToConsole('¡Hub conectado exitosamente!', 'success');
 
         } catch (e) {
-            logToConsole('Error: ' + e.message, 'error');
+            logToConsole('Error de conexión: ' + e.message, 'error');
         }
     }
 }
@@ -110,37 +108,45 @@ function updateUI(connected) {
 }
 
 async function runScript() {
-    if (!isConnected) return;
+    if (!isConnected || !commandChar) return;
 
+    // 1. Sanitización de código
     const rawCode = editor.getValue();
-    // Normalizar saltos de línea para contar bytes exactos
     const code = rawCode.replace(/\r\n/g, '\n');
     const codeBytes = new TextEncoder().encode(code);
     const size = codeBytes.length;
 
-    logToConsole(`Iniciando subida (${size} bytes)...`, 'info');
+    logToConsole(`Iniciando ciclo de subida ultra-seguro (${size} bytes)...`, 'info');
 
     try {
-        // 1. DETENER (Tiempo extendido)
-        // Damos tiempo al hub para frenar motores y cerrar procesos
-        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
-        await new Promise(r => setTimeout(r, 500));
+        // --- CICLO ULTRA-ARMADO: STOP -> CLEAR -> PREPARE -> CHUNKS -> COMMIT -> START ---
 
-        // 2. ENVIAR METADATA (Informar tamaño)
-        const meta = new ArrayBuffer(5);
-        const view = new DataView(meta);
-        view.setUint8(0, CMD_WRITE_USER_PROGRAM_META);
-        view.setUint32(1, size, true); // Little Endian
-        await commandChar.writeValueWithoutResponse(meta);
+        // A. STOP: Forzar detención de cualquier proceso previo
+        logToConsole('Deteniendo procesos previos...', 'info');
+        await commandChar.writeValueWithResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
+        await new Promise(r => setTimeout(r, 600));
 
-        // PAUSA CRÍTICA: El Hub necesita tiempo para preparar la RAM/Flash
+        // B. CLEAR: Notificar al Hub que vamos a limpiar el slot (Size 0)
+        logToConsole('Limpiando memoria flash del Hub...', 'info');
+        const clearMeta = new Uint8Array([CMD_WRITE_USER_PROGRAM_META, 0, 0, 0, 0]);
+        await commandChar.writeValueWithResponse(clearMeta);
+        await new Promise(r => setTimeout(r, 400));
+
+        // C. PREPARE: Enviar tamaño real para preparar la recepción
+        logToConsole('Preparando recepción de datos...', 'info');
+        const prepareMeta = new ArrayBuffer(5);
+        const prepareView = new DataView(prepareMeta);
+        prepareView.setUint8(0, CMD_WRITE_USER_PROGRAM_META);
+        prepareView.setUint32(1, size, true);
+        await commandChar.writeValueWithResponse(prepareMeta);
         await new Promise(r => setTimeout(r, 200));
 
-        // 3. ENVIAR CODIGO (Chunks lentos)
-        // Usamos chunks muy pequeños para asegurar estabilidad
+        // D. UPLOAD: Enviar chunks (15 bytes c/u, con pausas periódicas)
         const maxChunk = 15;
         let offset = 0;
+        let packetCount = 0;
 
+        logToConsole('Subiendo programa en bloques protegidos...', 'info');
         while (offset < size) {
             const chunkPayloadSize = Math.min(maxChunk, size - offset);
             const packet = new ArrayBuffer(5 + chunkPayloadSize);
@@ -152,30 +158,35 @@ async function runScript() {
             const chunkData = codeBytes.slice(offset, offset + chunkPayloadSize);
             new Uint8Array(packet, 5).set(chunkData);
 
+            // Usamos writeWithoutResponse para los bloques de RAM para no saturar el canal
             await commandChar.writeValueWithoutResponse(packet);
             offset += chunkPayloadSize;
+            packetCount++;
 
-            // Pausa entre paquetes (50ms es lento pero seguro)
+            // Pausa entre paquetes (50ms para máxima estabilidad)
             await new Promise(r => setTimeout(r, 50));
         }
 
-        logToConsole('Subida completada. Esperando guardado...', 'info');
+        logToConsole('Sincronizando memoria...', 'info');
+        await new Promise(r => setTimeout(r, 600));
 
-        // 4. ESPERA FINAL ANTES DE ARRANCAR
-        // Dar tiempo a que el último paquete se escriba en memoria
-        await new Promise(r => setTimeout(r, 1000));
+        // E. COMMIT: Re-confirmar el tamaño para grabar permanentemente en Flash
+        logToConsole('Garantizando persistencia en Flash...', 'info');
+        await commandChar.writeValueWithResponse(prepareMeta);
+        await new Promise(r => setTimeout(r, 800));
 
-        // 5. ARRANCAR
-        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
-        logToConsole('Comando de arranque enviado.', 'success');
+        // F. START: Iniciar el nuevo programa
+        logToConsole('Ejecutando script nuevo...', 'success');
+        await commandChar.writeValueWithResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
 
     } catch (e) {
-        logToConsole('Error subida: ' + e.message, 'error');
+        logToConsole('Fallo crítico en subida: ' + e.message, 'error');
+        console.error(e);
     }
 }
 
 async function stopScript() {
-    if (isConnected) await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
+    if (isConnected) await commandChar.writeValueWithResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
 }
 
 function saveCode() {
