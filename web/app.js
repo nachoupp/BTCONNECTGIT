@@ -1,40 +1,26 @@
-let editor;
-let device;
-let server;
-let commandChar;
-let isConnected = false;
+let editor, device, server, commandChar, isConnected = false;
 let hubCapabilities = { maxCharSize: 20 };
 
-// UUIDs Pybricks
-const PYBRICKS_SERVICE_UUID = 'c5f50001-8280-46da-89f4-6d8051e4aeef';
-const PYBRICKS_COMMAND_UUID = 'c5f50002-8280-46da-89f4-6d8051e4aeef';
+const SERVICE_UUID = 'c5f50001-8280-46da-89f4-6d8051e4aeef';
+const CHAR_UUID = 'c5f50002-8280-46da-89f4-6d8051e4aeef';
 
-// Comandos del Protocolo
-const CMD_STOP_USER_PROGRAM = 0;
-const CMD_START_USER_PROGRAM = 1;
-const CMD_WRITE_USER_PROGRAM_META = 3;
-const CMD_WRITE_USER_RAM = 4;
+// Comandos Pybricks
+const CMD_STOP = 0;
+const CMD_START = 1;
+const CMD_META = 3;
+const CMD_RAM = 4;
 
-// Eventos
-const EVENT_WRITE_STDOUT = 1;
-
-// Inicialización de Monaco Editor
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.46.0/min/vs' } });
-require(['vs/editor/editor.main'], function () {
+require(['vs/editor/editor.main'], () => {
     editor = monaco.editor.create(document.getElementById('editor-container'), {
         value: [
             'from pybricks.hubs import PrimeHub',
             'from pybricks.tools import wait',
-            'from pybricks.parameters import Color',
             '',
-            '# --- CODIGO ULTRA-ARMADO ---',
-            'print(">>> PROGRAMA NUEVO CARGADO <<<")',
             'hub = PrimeHub()',
-            'hub.display.char("A")',
-            'hub.light.on(Color.GREEN)',
-            'wait(2000)',
-            'hub.light.on(Color.BLUE)',
-            'print(">>> Script finalizado con exito <<<")'
+            'print("Hello BTCONNECT!")',
+            'hub.display.text("OK")',
+            'wait(2000)'
         ].join('\n'),
         language: 'python',
         theme: 'vs-dark',
@@ -42,22 +28,20 @@ require(['vs/editor/editor.main'], function () {
     });
 });
 
-window.addEventListener('load', () => {
-    document.getElementById('connectBtn').addEventListener('click', toggleConnect);
-    document.getElementById('runBtn').addEventListener('click', runScript);
-    document.getElementById('stopBtn').addEventListener('click', stopScript);
-    document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
-    document.getElementById('saveBtn').addEventListener('click', saveCode);
-    document.getElementById('fileInput').addEventListener('change', loadFile);
-});
+window.onload = () => {
+    document.getElementById('connectBtn').onclick = toggleConnect;
+    document.getElementById('runBtn').onclick = runScript;
+    document.getElementById('stopBtn').onclick = stopScript;
+    document.getElementById('uploadBtn').onclick = () => document.getElementById('fileInput').click();
+    document.getElementById('saveBtn').onclick = saveCode;
+    document.getElementById('fileInput').onchange = loadFile;
+};
 
-function logToConsole(msg, type = 'info') {
+function log(msg, type = '') {
     const box = document.getElementById('consoleOutput');
-    const div = document.createElement('div');
     const time = new Date().toLocaleTimeString().split(' ')[0];
-    div.className = 'log-entry';
-    div.innerHTML = `<span class="text-gray">[${time}]</span> <span class="${type === 'error' ? 'text-red' : (type === 'success' ? 'text-green' : '')}">${msg}</span>`;
-    box.appendChild(div);
+    const color = type === 'error' ? 'text-red' : (type === 'success' ? 'text-green' : 'text-gray');
+    box.innerHTML += `<div class="log-entry"><span class="text-gray">[${time}]</span> <span class="${color}">${msg}</span></div>`;
     box.scrollTop = box.scrollHeight;
 }
 
@@ -66,141 +50,104 @@ async function toggleConnect() {
         if (device && device.gatt.connected) await device.gatt.disconnect();
     } else {
         try {
-            logToConsole('Buscando Pybricks Hub...', 'info');
+            log('Buscando Hub...');
             device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'Pybricks' }],
-                optionalServices: [PYBRICKS_SERVICE_UUID]
+                optionalServices: [SERVICE_UUID]
             });
             device.addEventListener('gattserverdisconnected', () => {
-                isConnected = false;
-                updateUI(false);
-                logToConsole('Hub desconectado.', 'info');
+                isConnected = false; updateUI(); log('Desconectado.');
             });
-
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(PYBRICKS_SERVICE_UUID);
-            commandChar = await service.getCharacteristic(PYBRICKS_COMMAND_UUID);
+            server = await device.gatt.connect();
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            commandChar = await service.getCharacteristic(CHAR_UUID);
 
             await commandChar.startNotifications();
             commandChar.addEventListener('characteristicvaluechanged', (e) => {
                 const view = e.target.value;
-                if (view.getUint8(0) === EVENT_WRITE_STDOUT) {
-                    const text = new TextDecoder().decode(new DataView(view.buffer, 1));
-                    logToConsole(text, 'success');
+                if (view.getUint8(0) === 1) { // STDOUT
+                    log(new TextDecoder().decode(new DataView(view.buffer, 1)), 'success');
                 }
             });
-
-            isConnected = true;
-            updateUI(true);
-            logToConsole('¡Hub conectado exitosamente!', 'success');
-
-        } catch (e) {
-            logToConsole('Error de conexión: ' + e.message, 'error');
-        }
+            isConnected = true; updateUI(); log('¡Conectado!', 'success');
+        } catch (e) { log(e.message, 'error'); }
     }
 }
 
-function updateUI(connected) {
-    document.getElementById('connectBtn').innerText = connected ? 'Desconectar' : 'Conectar Hub';
-    document.getElementById('runBtn').disabled = !connected;
-    document.getElementById('stopBtn').disabled = !connected;
-    document.getElementById('connectBtn').className = connected ? 'btn-danger' : 'btn-primary';
+function updateUI() {
+    const btn = document.getElementById('connectBtn');
+    btn.innerText = isConnected ? 'Desconectar' : 'Conectar Hub';
+    btn.className = isConnected ? 'btn btn-danger' : 'btn btn-primary';
+    document.getElementById('runBtn').disabled = !isConnected;
+    document.getElementById('stopBtn').disabled = !isConnected;
 }
 
 async function runScript() {
-    if (!isConnected || !commandChar) return;
+    if (!isConnected) return;
 
-    // 1. Sanitización de código
-    const rawCode = editor.getValue();
-    const code = rawCode.replace(/\r\n/g, '\n');
-    const codeBytes = new TextEncoder().encode(code);
-    const size = codeBytes.length;
+    // 1. PREPARAR CÓDIGO (Sanitizar saltos de línea es CLAVE)
+    const raw = editor.getValue();
+    const code = raw.replace(/\r\n/g, '\n'); // Convertir Windows CRLF a Unix LF
+    const bytes = new TextEncoder().encode(code);
+    const size = bytes.length;
 
-    logToConsole(`Iniciando ciclo de subida ultra-seguro (${size} bytes)...`, 'info');
+    log(`Subiendo ${size} bytes...`);
 
     try {
-        // --- CICLO ULTRA-ARMADO: STOP -> CLEAR -> PREPARE -> CHUNKS -> COMMIT -> START ---
+        // A. STOP (Rápido)
+        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP]));
+        await new Promise(r => setTimeout(r, 100)); // Espera breve estándar
 
-        // A. STOP: Forzar detención de cualquier proceso previo
-        logToConsole('Deteniendo procesos previos...', 'info');
-        await commandChar.writeValueWithResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
-        await new Promise(r => setTimeout(r, 600));
+        // B. METADATA (Tamaño real)
+        const meta = new ArrayBuffer(5);
+        new DataView(meta).setUint8(0, CMD_META);
+        new DataView(meta).setUint32(1, size, true); // Little Endian
+        await commandChar.writeValueWithoutResponse(meta);
 
-        // B. CLEAR: Notificar al Hub que vamos a limpiar el slot (Size 0)
-        logToConsole('Limpiando memoria flash del Hub...', 'info');
-        const clearMeta = new Uint8Array([CMD_WRITE_USER_PROGRAM_META, 0, 0, 0, 0]);
-        await commandChar.writeValueWithResponse(clearMeta);
-        await new Promise(r => setTimeout(r, 400));
-
-        // C. PREPARE: Enviar tamaño real para preparar la recepción
-        logToConsole('Preparando recepción de datos...', 'info');
-        const prepareMeta = new ArrayBuffer(5);
-        const prepareView = new DataView(prepareMeta);
-        prepareView.setUint8(0, CMD_WRITE_USER_PROGRAM_META);
-        prepareView.setUint32(1, size, true);
-        await commandChar.writeValueWithResponse(prepareMeta);
-        await new Promise(r => setTimeout(r, 200));
-
-        // D. UPLOAD: Enviar chunks (15 bytes c/u, con pausas periódicas)
-        const maxChunk = 15;
+        // C. CHUNKS (Optimizado para no saturar pero no dormir)
+        const maxChunk = 18; // Seguro para BLE estándar
         let offset = 0;
-        let packetCount = 0;
 
-        logToConsole('Subiendo programa en bloques protegidos...', 'info');
         while (offset < size) {
-            const chunkPayloadSize = Math.min(maxChunk, size - offset);
-            const packet = new ArrayBuffer(5 + chunkPayloadSize);
-            const packetView = new DataView(packet);
+            const chunkSize = Math.min(maxChunk, size - offset);
+            const packet = new ArrayBuffer(5 + chunkSize);
 
-            packetView.setUint8(0, CMD_WRITE_USER_RAM);
-            packetView.setUint32(1, offset, true);
+            new DataView(packet).setUint8(0, CMD_RAM);
+            new DataView(packet).setUint32(1, offset, true);
+            new Uint8Array(packet, 5).set(bytes.slice(offset, offset + chunkSize));
 
-            const chunkData = codeBytes.slice(offset, offset + chunkPayloadSize);
-            new Uint8Array(packet, 5).set(chunkData);
-
-            // Usamos writeWithoutResponse para los bloques de RAM para no saturar el canal
             await commandChar.writeValueWithoutResponse(packet);
-            offset += chunkPayloadSize;
-            packetCount++;
+            offset += chunkSize;
 
-            // Pausa entre paquetes (50ms para máxima estabilidad)
-            await new Promise(r => setTimeout(r, 50));
+            // Pausa mínima necesaria para que el stack Bluetooth respire
+            // 20ms es suficiente, 500ms es demasiado (causa el GATT Error)
+            await new Promise(r => setTimeout(r, 20));
         }
 
-        logToConsole('Sincronizando memoria...', 'info');
-        await new Promise(r => setTimeout(r, 600));
-
-        // E. COMMIT: Re-confirmar el tamaño para grabar permanentemente en Flash
-        logToConsole('Garantizando persistencia en Flash...', 'info');
-        await commandChar.writeValueWithResponse(prepareMeta);
-        await new Promise(r => setTimeout(r, 800));
-
-        // F. START: Iniciar el nuevo programa
-        logToConsole('Ejecutando script nuevo...', 'success');
-        await commandChar.writeValueWithResponse(new Uint8Array([CMD_START_USER_PROGRAM]));
+        log('Ejecutando...', 'success');
+        // D. START
+        await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_START]));
 
     } catch (e) {
-        logToConsole('Fallo crítico en subida: ' + e.message, 'error');
-        console.error(e);
+        log('Error: ' + e.message, 'error');
     }
 }
 
 async function stopScript() {
-    if (isConnected) await commandChar.writeValueWithResponse(new Uint8Array([CMD_STOP_USER_PROGRAM]));
+    if (isConnected) await commandChar.writeValueWithoutResponse(new Uint8Array([CMD_STOP]));
 }
 
 function saveCode() {
-    const blob = new Blob([editor.getValue()], { type: 'text/plain' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(new Blob([editor.getValue()], { type: 'text/plain' }));
     a.download = 'main.py';
     a.click();
 }
 
 function loadFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => editor.setValue(ev.target.result);
-    reader.readAsText(file);
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = (ev) => editor.setValue(ev.target.result);
+    r.readAsText(f);
 }
