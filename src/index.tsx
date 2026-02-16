@@ -42,7 +42,8 @@ const store = configureStore({
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({ serializableCheck })
             .concat(sagaMiddleware)
-            .concat(loggerMiddleware),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .concat(loggerMiddleware as any),
 });
 
 // special styling for beta versions

@@ -7,9 +7,8 @@ import { compile, didCompile, didFailToCompile } from './actions';
 import mpy from './sagas';
 
 const mpyCrossV5Wasm = require.resolve('@pybricks/mpy-cross-v5/build/mpy-cross.wasm');
-const mpyCrossV6Wasm = require.resolve(
-    '@pybricks/mpy-cross-v6/build/mpy-cross-v6.wasm',
-);
+const mpyCrossV6Wasm =
+    require.resolve('@pybricks/mpy-cross-v6/build/mpy-cross-v6.wasm');
 
 beforeEach(() => {
     // HACK: work around Emscripten + Webpack bugs

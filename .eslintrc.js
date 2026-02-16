@@ -18,6 +18,7 @@ module.exports = {
     plugins: ['react'],
     rules: {
         curly: 'error',
+        'prettier/prettier': ['error', { endOfLine: 'auto' }],
         eqeqeq: 'error',
         'no-multi-spaces': 'error',
         'no-trailing-spaces': 'error',

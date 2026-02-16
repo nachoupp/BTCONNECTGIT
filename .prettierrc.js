@@ -4,4 +4,5 @@ module.exports = {
     singleQuote: true,
     printWidth: 88,
     tabWidth: 4,
+    endOfLine: 'crlf',
 };

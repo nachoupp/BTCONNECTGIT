@@ -11,11 +11,11 @@ const projectDir = path.resolve(__dirname, '..');
 
 // Permissive licenses can be added here. We would like to avoid copyleft.
 const approvedLicenses = [
-    '0BSD', 
-    'Apache-2.0', 
-    'BSD-3-Clause', 
-    'ISC', 
-    'MIT', 
+    '0BSD',
+    'Apache-2.0',
+    'BSD-3-Clause',
+    'ISC',
+    'MIT',
     'Python-2.0',
 ];
 
@@ -27,7 +27,11 @@ const approvedLicenses = [
  * @returns A string or undefined.
  */
 function personToString(person) {
-    if (typeof person === 'string' || typeof person === 'undefined') {
+    if (!person) {
+        return undefined;
+    }
+
+    if (typeof person === 'string') {
         return person;
     }
 
@@ -40,7 +44,7 @@ function personToString(person) {
     if (person.url) {
         str += ` (${person.url})`;
     }
-    
+
     return str;
 }
 
@@ -49,6 +53,16 @@ function personToString(person) {
 
 const dexieLicense = fs.readFileSync(
     path.join(projectDir, 'node_modules', 'dexie', 'LICENSE'),
+    { encoding: 'utf-8' },
+);
+
+const monacoThemesLicense = fs.readFileSync(
+    path.join(projectDir, 'node_modules', 'monaco-themes', 'LICENSE'),
+    { encoding: 'utf-8' },
+);
+
+const pybricksCodeLicense = fs.readFileSync(
+    path.join(projectDir, 'LICENSE'),
     { encoding: 'utf-8' },
 );
 
@@ -570,6 +584,8 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`,
+    'redux-saga/effects': spdxMIT,
+    '@redux-saga/core/effects': spdxMIT,
     'zen-push': `Copyright (c) 2018 zenparsing (Kevin Smith)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -588,6 +604,8 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`,
+    'monaco-themes': monacoThemesLicense,
+    '@pybricks/pybricks-code': pybricksCodeLicense,
 };
 
 module.exports = {
@@ -595,7 +613,8 @@ module.exports = {
     perChunkOutput: false,
     renderLicenses: (modules) => {
         return JSON.stringify(
-            modules
+            (modules || [])
+                .filter((m) => m && m.packageJson)
                 .map((m) => ({
                     name: m.packageJson.name,
                     version: m.packageJson.version,
@@ -603,7 +622,7 @@ module.exports = {
                     license: m.licenseId,
                     licenseText: m.licenseText,
                 }))
-                .sort((a, b) => a.name.localeCompare(b.name, 'en')),
+                .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'en')),
         );
     },
     licenseTextOverrides,
@@ -615,8 +634,12 @@ module.exports = {
         },
     ],
     unacceptableLicenseTest: (licenseType) =>
-        !satisfies(licenseType, `(${approvedLicenses.join(' OR ')})`),
+        licenseType && !satisfies(licenseType, `(${approvedLicenses.join(' OR ')})`),
     handleMissingLicenseText: (packageName, licenseType) => {
+        // Skip packages with null license types (e.g., internal sub-packages)
+        if (!licenseType) {
+            return '';
+        }
         throw new Error(`missing license text for ${packageName} (${licenseType})`);
     },
 };

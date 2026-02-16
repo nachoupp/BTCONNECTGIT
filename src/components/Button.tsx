@@ -68,7 +68,7 @@ export const Button: React.FunctionComponent<ButtonProps> = ({
                         [Classes.LOADING]: loading,
                         [Classes.MINIMAL]: minimal,
                     })}
-                    ref={mergeRefs(ref, elementRef ?? null)}
+                    ref={mergeRefs(ref, elementRef) as any} // eslint-disable-line @typescript-eslint/no-explicit-any
                     {...buttonProps}
                 >
                     {loading ? (

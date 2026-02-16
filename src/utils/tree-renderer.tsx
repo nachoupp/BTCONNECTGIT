@@ -6,14 +6,7 @@
 // based on https://github.com/lukasbach/react-complex-tree/blob/239fb0c5f49f3c24e307142fb3d7e828440c3f55/packages/blueprintjs-renderers/src/renderers.tsx
 // Copyright (c) 2021 Lukas Bach
 
-import {
-    Button,
-    Classes,
-    Colors,
-    Icon,
-    InputGroup,
-    MaybeElement,
-} from '@blueprintjs/core';
+import { Classes, Colors, Icon, InputGroup, MaybeElement } from '@blueprintjs/core';
 import { ChevronRight, Tick } from '@blueprintjs/icons';
 import React, { createContext } from 'react';
 import { TreeItem, TreeRenderProps } from 'react-complex-tree';
@@ -202,14 +195,14 @@ const RenameInput: React.FunctionComponent<RenderProps<'renderRenameInput'>> = (
             />
         </span>
         <span className={Classes.TREE_NODE_SECONDARY_LABEL}>
-            <Button
-                icon={<Tick />}
+            <button
                 {...props.submitButtonProps}
                 ref={props.submitButtonRef}
                 type="submit"
-                minimal={true}
-                small={true}
-            />
+                className={`${Classes.BUTTON} ${Classes.MINIMAL}`}
+            >
+                <Tick />
+            </button>
         </span>
     </form>
 );

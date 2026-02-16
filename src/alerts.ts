@@ -40,12 +40,10 @@ export type AlertSpecific<D extends AlertDomain> = keyof (typeof alertDomains)[D
  * @template D The domain.
  * @template S The specific instance name in the domain.
  */
-type AlertInstance<
-    D extends AlertDomain,
-    S extends AlertSpecific<D>,
-> = (typeof alertDomains)[D][S] extends CreateToast<infer P, infer A>
-    ? CreateToast<P, A>
-    : never;
+type AlertInstance<D extends AlertDomain, S extends AlertSpecific<D>> =
+    (typeof alertDomains)[D][S] extends CreateToast<infer P, infer A>
+        ? CreateToast<P, A>
+        : never;
 
 /**
  * Gets the type of the `onAlert` callback for a specific instance in the lookup table.

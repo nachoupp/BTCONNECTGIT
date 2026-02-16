@@ -66,8 +66,10 @@ toDispose.push(
 
 // https://webpack.js.org/api/hot-module-replacement/
 // istanbul ignore if: only used for development
-if (module.hot) {
-    module.hot.dispose(() => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+if ((import.meta as any).hot) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (import.meta as any).hot.dispose(() => {
         toDispose.forEach((s) => s.dispose());
     });
 }
