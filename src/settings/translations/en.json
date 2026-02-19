@@ -1,5 +1,5 @@
 {
-    "title": "Settings & Help",
+    "title": "Settings",
     "appearance": {
         "title": "Appearance",
         "darkMode": {
@@ -17,21 +17,6 @@
         },
         "flashLegoButton": {
             "label": "Restore Official {lego} Firmware"
-        }
-    },
-    "help": {
-        "title": "Help",
-        "projects": {
-            "label": "Example Projects"
-        },
-        "support": {
-            "label": "Support"
-        },
-        "chat": {
-            "label": "Chat"
-        },
-        "bugs": {
-            "label": "Bug Reports"
         }
     },
     "app": {
