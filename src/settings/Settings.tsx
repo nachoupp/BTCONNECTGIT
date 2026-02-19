@@ -3,7 +3,6 @@
 
 import './settings.scss';
 import {
-    AnchorButton,
     ButtonGroup,
     ControlGroup,
     FormGroup,
@@ -11,13 +10,9 @@ import {
 } from '@blueprintjs/core';
 import {
     Add,
-    Chat,
     Download,
-    Help,
     InfoSign,
-    Lightbulb,
     Refresh,
-    Virus,
 } from '@blueprintjs/icons';
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
@@ -26,19 +21,14 @@ import AboutDialog from '../about/AboutDialog';
 import { appCheckForUpdate, appReload, appShowInstallPrompt } from '../app/actions';
 import {
     legoRegisteredTrademark,
-    pybricksBugReportsUrl,
-    pybricksGitterUrl,
-    pybricksProjectsUrl,
-    pybricksSupportUrl,
 } from '../app/constants';
+
 import { Button } from '../components/Button';
-import ExternalLinkIcon from '../components/ExternalLinkIcon';
-import HelpButton from '../components/HelpButton';
+import HelpButton from '../components/HelpButton'; 
 import { firmwareInstallPybricks } from '../firmware/actions';
 import { firmwareRestoreOfficialDialogShow } from '../firmware/restoreOfficialDialog/actions';
 import { pseudolocalize } from '../i18n';
 import { useSelector } from '../reducers';
-import { tourStart } from '../tour/actions';
 import { isMacOS } from '../utils/os';
 import { useI18n } from './i18n';
 
@@ -106,55 +96,10 @@ const Settings: React.FunctionComponent = () => {
                     onPress={() => dispatch(firmwareRestoreOfficialDialogShow())}
                 />
             </FormGroup>
-            <FormGroup label={i18n.translate('help.title')}>
-                <ButtonGroup minimal={true} vertical={true} alignText="left">
-                    <Button
-                        id="pb-settings-tour-button"
-                        label={i18n.translate('app.tour.label')}
-                        icon={<InfoSign />}
-                        onPress={() => {
-                            dispatch(tourStart());
-                            return true;
-                        }}
-                    />
-                    <AnchorButton
-                        icon={<Lightbulb />}
-                        href={pybricksProjectsUrl}
-                        target="blank_"
-                    >
-                        {i18n.translate('help.projects.label')}
-                        <ExternalLinkIcon />
-                    </AnchorButton>
-                    <AnchorButton
-                        icon={<Help />}
-                        href={pybricksSupportUrl}
-                        target="blank_"
-                    >
-                        {i18n.translate('help.support.label')}
-                        <ExternalLinkIcon />
-                    </AnchorButton>
-                    <AnchorButton
-                        icon={<Chat />}
-                        href={pybricksGitterUrl}
-                        target="blank_"
-                    >
-                        {i18n.translate('help.chat.label')}
-                        <ExternalLinkIcon />
-                    </AnchorButton>
-                    <AnchorButton
-                        icon={<Virus />}
-                        href={pybricksBugReportsUrl}
-                        target="blank_"
-                    >
-                        {i18n.translate('help.bugs.label')}
-                        <ExternalLinkIcon />
-                    </AnchorButton>
-                    <AboutDialog
-                        isOpen={isAboutDialogOpen}
-                        onClose={() => setIsAboutDialogOpen(false)}
-                    />
-                </ButtonGroup>
-            </FormGroup>
+        <AboutDialog
+            isOpen={isAboutDialogOpen}
+            onClose={() => setIsAboutDialogOpen(false)}
+        />
             <FormGroup
                 label={i18n.translate('app.title')}
                 helperText={readyForOfflineUse && i18n.translate('app.offlineUseHelp')}
