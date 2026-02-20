@@ -12,10 +12,10 @@ import DfuWindowsDriverInstallDialog from '../firmware/dfuWindowsDriverInstallDi
 import { InstallPybricksDialog } from '../firmware/installPybricksDialog/InstallPybricksDialog';
 import RestoreOfficialDialog from '../firmware/restoreOfficialDialog/RestoreOfficialDialog';
 import { useSettingIsShowDocsEnabled } from '../settings/hooks';
-import SponsorDialog from '../sponsor/SponsorDialog';
+
 import StatusBar from '../status-bar/StatusBar';
 import Toolbar from '../toolbar/Toolbar';
-import Tour from '../tour/Tour';
+
 import { isMacOS } from '../utils/os';
 import { useAppLastDocsPageSetting } from './hooks';
 import { useI18n } from './i18n';
@@ -248,11 +248,11 @@ const App: React.FunctionComponent = () => {
                 </div>
             </div>
             <StatusBar />
-            <Tour />
+
             <DfuWindowsDriverInstallDialog />
             <InstallPybricksDialog />
             <RestoreOfficialDialog />
-            <SponsorDialog />
+
         </div>
     );
 };

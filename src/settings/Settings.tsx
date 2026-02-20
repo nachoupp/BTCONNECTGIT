@@ -11,20 +11,19 @@ import {
 import {
     Add,
     Download,
-    InfoSign,
     Refresh,
 } from '@blueprintjs/icons';
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useTernaryDarkMode } from 'usehooks-ts';
-import AboutDialog from '../about/AboutDialog';
+
 import { appCheckForUpdate, appReload, appShowInstallPrompt } from '../app/actions';
 import {
     legoRegisteredTrademark,
 } from '../app/constants';
 
 import { Button } from '../components/Button';
-import HelpButton from '../components/HelpButton'; 
+ 
 import { firmwareInstallPybricks } from '../firmware/actions';
 import { firmwareRestoreOfficialDialogShow } from '../firmware/restoreOfficialDialog/actions';
 import { pseudolocalize } from '../i18n';
@@ -33,7 +32,7 @@ import { isMacOS } from '../utils/os';
 import { useI18n } from './i18n';
 
 const Settings: React.FunctionComponent = () => {
-    const [isAboutDialogOpen, setIsAboutDialogOpen] = useState(false);
+
     const { isDarkMode, setTernaryDarkMode } = useTernaryDarkMode();
 
     const isServiceWorkerRegistered = useSelector(
@@ -69,12 +68,8 @@ const Settings: React.FunctionComponent = () => {
                                 (e.target as HTMLInputElement).checked
                                     ? 'dark'
                                     : 'light',
-                            )
+                    )
                         }
-                    />
-                    <HelpButton
-                        helpForLabel={i18n.translate('appearance.darkMode.label')}
-                        content={i18n.translate('appearance.darkMode.help')}
                     />
                 </ControlGroup>
             </FormGroup>
@@ -96,10 +91,7 @@ const Settings: React.FunctionComponent = () => {
                     onPress={() => dispatch(firmwareRestoreOfficialDialogShow())}
                 />
             </FormGroup>
-        <AboutDialog
-            isOpen={isAboutDialogOpen}
-            onClose={() => setIsAboutDialogOpen(false)}
-        />
+
             <FormGroup
                 label={i18n.translate('app.title')}
                 helperText={readyForOfflineUse && i18n.translate('app.offlineUseHelp')}
@@ -130,14 +122,7 @@ const Settings: React.FunctionComponent = () => {
                             onPress={() => dispatch(appReload())}
                         />
                     )}
-                    <Button
-                        label={i18n.translate('app.about.label')}
-                        icon={<InfoSign />}
-                        onPress={() => {
-                            setIsAboutDialogOpen(true);
-                            return true;
-                        }}
-                    />
+
                 </ButtonGroup>
             </FormGroup>
             {process.env.NODE_ENV === 'development' && (
